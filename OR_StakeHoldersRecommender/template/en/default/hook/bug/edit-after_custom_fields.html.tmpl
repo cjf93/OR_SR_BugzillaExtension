@@ -1,0 +1,288 @@
+[%# This Source Code Form is subject to the terms of the Mozilla Public
+  # License, v. 2.0. If a copy of the MPL was not distributed with this
+  # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+  #
+  # This Source Code Form is "Incompatible With Secondary Licenses", as
+  # defined by the Mozilla Public License, v. 2.0.
+  #%]
+
+[% IF user.id != 0%]
+  [% PROCESS section_spacer %]
+  [% PROCESS open_req %]
+[% END %]
+
+[%############################################################################%]
+[%# Block OPEN REQ                                                           #%]
+[%############################################################################%]
+[% BLOCK open_req %]
+    <table class="open_req_table">
+    <div class="open_req_title">
+        <b>OpenReq&nbsp;StakeHolder Recommender</b>
+    </div>
+    <div class="open_req_buttons_container">
+      <div class="open_req_input_container">
+        Nº recommendations: <input type="text" value="[% OR_SR_k %]" class="open_req_input" id="OR_InputK">
+      </div>
+      <div class="open_req_button">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="OR_RecommendButton">Recommend StakeHolders</button>
+      </div>
+      <div class="open_req_button">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="OR_UndoLastButton">Undo Last Rejection</button>
+      </div>
+    </div>
+      <tr class="open_req_row">
+        <th class="open_req_table_header">
+          Person
+        </th>
+        <th class="open_req_table_header">
+          Appropietness Score
+        </th>
+        <th class="open_req_table_header">
+          Actions
+        </th>
+      </tr>
+      [% iterator = 0 %]
+      [% FOREACH id IN OR_SR_RecommendResponse %]
+      <tr class="open_req_row_[% iterator %]">
+        <td>
+          <span class="open_req_user_recomended" id="[%iterator%]" data-name="[% id.person.username %]">[% id.person.username %]</span>
+        </td>
+        <td>
+          [% progress = (100 * id.appropiatenessScore) mod 100 %]
+          [% IF id.appropiatenessScore == 1.0 %]
+            [% progress = 100 %]
+          [% END %]
+          <div class="progress">
+              <div class="progress-bar" role="progressbar" style="width: [% progress %]%;" aria-valuenow="[% progress %]" aria-valuemin="0" aria-valuemax="100">[% progress %]%</div>
+            </div>
+        </td>
+        <td class="open_req_buttons_container_table">
+          <div class="open_req_button">
+            <button type="button" class="btn btn-outline-primary btn-sm OR_Button_Accept" id="[% iterator %]" onClick="Assign_click(this.id)">Assign Recommendation</button>
+          </div>
+          <div class="open_req_button">
+            <button type="button" class="btn btn-outline-danger btn-sm OR_Button_Reject" id="[% iterator %]" onClick="Reject_click(this.id)">Reject Recommendation</button>
+          </div>
+          <!----<div class="open_req_button">
+            <button type="button" class="btn btn-outline-dark btn-sm OR_Button_CCUser" id="[% iterator %]" onClick="CC_User_click(this.id)">CC User</button>
+          </div>-->
+        </td>
+        </tr>
+         [% iterator = iterator + 1 %]
+      [% END %]
+    </table> 
+    [% IF OR_SR_Error %]
+    Error with the StakeHolders Recommender: [% OR_SR_Error %]
+    [% END %]
+[% END %]
+
+[%############################################################################%]
+[%# Block for Section Spacer                                                 #%]
+[%############################################################################%]
+
+[% BLOCK section_spacer %]
+  <tr>
+    <td colspan="2" class="bz_section_spacer"></td>
+  </tr>
+[% END %]
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+[%###################################%]
+[%####### Recommend Button JS########%]
+[%###################################%]
+<script type="text/javascript">
+  $(document).ready(function(){  
+      $('#OR_RecommendButton').click(function(e) {
+            var inputvalue = $("#OR_InputK").val();
+            var currentURI = window.location.href;
+            var index = currentURI.indexOf("or_k=");
+            if(index == -1) {
+              window.location = window.location.href +"&or_k="+inputvalue;
+            }
+            else {
+              var substring1 = currentURI.substr(0, index+5);
+              var substring2 = currentURI.substr(index+5, currentURI.length)
+              var index2 = substring2.indexOf("&");
+
+              if(index2 == -1) {
+                var newURI = substring1 + inputvalue;
+                newURI = OR_SR_removeParam("or_assign", newURI)
+                window.location = newURI;
+              }
+              else {
+                var substring3 = substring2.substr(index2, substring2.length)
+                var newURI = substring1 + inputvalue + substring3;
+                newURI = OR_SR_removeParam("or_assign", newURI)
+                window.location = newURI;
+              }
+            }
+      });
+  });
+  </script> 
+
+[%###################################%]
+[%####### CSS Bug Fix ###############%]
+[%###################################%]
+<script type="text/javascript">
+    $(document).ready(function(){  
+      var x = document.getElementsByClassName("open_req_buttons_container_table");
+      var i;
+      for (i = 0; i < x.length; i++) {
+        x[i].style.display = "inline-flex";
+      }
+    });
+</script>
+
+[%###################################%]
+[%####### Undo Button JS ###############%]
+[%###################################%]
+<script type="text/javascript">
+  var OR_SR_undoArrayIndex = 0;
+  var OR_SR_undoArray = [];
+  var OR_SR_undoArrayIDs = [];
+    $(document).ready(function(){  
+      $('#OR_UndoLastButton').click(function(e) {
+        
+        var OR_SR_currentHost = "[% OR_SR_basePath %]";
+        var OR_SR_bug_id = [% bug.bug_id %]
+        var OR_SR_organization = "[% OR_SR_organization %]"
+        var OR_SR_userRequesting = "[% user.email %]"
+        if(OR_SR_undoArrayIndex == 0) {
+          alert( "There is no rejection to perform undo" );   
+          return;
+        } 
+
+        var OR_SR_rejected = OR_SR_undoArray[OR_SR_undoArrayIndex]
+        var OR_SR_url = OR_SR_currentHost+"undoRejection?organization="+OR_SR_organization+"&rejected="+OR_SR_rejected+"&requirement="+OR_SR_bug_id+"&user="+OR_SR_userRequesting
+
+        $.post(OR_SR_url, function(data, status){
+          //alert("Data: " + data + "\nStatus: " + status);
+        })
+        .done(function() {
+          id = OR_SR_undoArrayIDs[OR_SR_undoArrayIndex];
+          --OR_SR_undoArrayIndex;       
+
+          var OR_SR_rejected_row = $(".open_req_row_"+id)
+          var OR_SR_rejected_row_bar = $(".open_req_row_"+id+" .progress-bar")
+          var OR_SR_rejected_button_assign = $(".open_req_row_"+id+" .OR_Button_Accept")
+          var OR_SR_rejected_button_reject = $(".open_req_row_"+id+" .OR_Button_Reject")
+          var OR_SR_rejected_button_cc = $(".open_req_row_"+id+" .OR_Button_CCUser")
+
+          OR_SR_rejected_row.removeClass("open_req_row_disabled")
+          OR_SR_rejected_row_bar.removeClass("progress-bar-disabled")
+          OR_SR_rejected_button_assign.removeClass('disabled');
+          OR_SR_rejected_button_reject.removeClass('disabled');
+          OR_SR_rejected_button_cc.removeClass('disabled');  
+        })
+        .fail(function() {
+          alert( "There was an error Undoing the rejection" );        
+        })
+      });
+    });
+</script>
+
+[%###################################%]
+[%####### Assign Button JS ##########%]
+[%###################################%]
+<script type="text/javascript">
+ function Assign_click(id)
+  {
+    var OR_SR_bug_id = [% bug.bug_id %]
+    var OR_SR_assign_user = $("#"+id+".open_req_user_recomended")[0].dataset.name
+    var OR_SR_currentURI = window.location.href;
+    var OR_SR_index = OR_SR_currentURI.indexOf("or_assign=");
+    if(OR_SR_index == -1) {
+      var OR_SR_newURI = window.location.href +"&or_assign="+OR_SR_assign_user;
+      var OR_SR_res = encodeURI(OR_SR_newURI);
+      window.location = OR_SR_res;
+    }
+    else {
+      var OR_SR_substring1 = OR_SR_currentURI.substr(0, OR_SR_index+10);
+      var OR_SR_substring2 = OR_SR_currentURI.substr(OR_SR_index+10, OR_SR_currentURI.length)
+      var OR_SR_index2 = OR_SR_substring2.indexOf("&");
+
+      if(OR_SR_index2 == -1) {
+        var OR_SR_newURI = OR_SR_substring1 + OR_SR_assign_user;
+        var OR_SR_res = encodeURI(OR_SR_newURI);
+        window.location = OR_SR_res;
+      }
+      else {
+        var OR_SR_substring3 = OR_SR_substring2.substr(OR_SR_index2, OR_SR_substring2.length)
+        var OR_SR_newURI = OR_SR_substring1 + OR_SR_assign_user + OR_SR_substring3;
+        var OR_SR_res = encodeURI(OR_SR_newURI);
+        window.location = OR_SR_res;
+      }
+    }
+  }
+</script>
+
+[%###################################%]
+[%####### Reject Button JS ##########%]
+[%###################################%]
+<script type="text/javascript">
+ function Reject_click(id)
+  {
+    var OR_SR_currentHost = "[% OR_SR_basePath %]";
+    var OR_SR_bug_id = [% bug.bug_id %]
+    var OR_SR_organization = "[% OR_SR_organization %]"
+    var OR_SR_rejected = $("#"+id+".open_req_user_recomended")[0].dataset.name
+    var OR_SR_userRequesting = "[% user.email %]"
+    
+
+    var url = OR_SR_currentHost+"reject_recommendation?organization="+OR_SR_organization+"&rejected="+OR_SR_rejected+"&requirement="+OR_SR_bug_id+"&user="+OR_SR_userRequesting 
+    $.post(url, function(data, status){
+      //alert("Data: " + data + "\nStatus: " + status);
+    })
+    .done(function() {
+      ++OR_SR_undoArrayIndex
+      OR_SR_undoArray[OR_SR_undoArrayIndex] = OR_SR_rejected
+      OR_SR_undoArrayIDs[OR_SR_undoArrayIndex] = id
+
+      var OR_SR_rejected_row = $(".open_req_row_"+id)
+      var OR_SR_rejected_row_bar = $(".open_req_row_"+id+" .progress-bar")
+      var OR_SR_rejected_button_assign = $(".open_req_row_"+id+" .OR_Button_Accept")
+      var OR_SR_rejected_button_reject = $(".open_req_row_"+id+" .OR_Button_Reject")
+      var OR_SR_rejected_button_cc = $(".open_req_row_"+id+" .OR_Button_CCUser")
+
+      OR_SR_rejected_row.addClass("open_req_row_disabled")
+      OR_SR_rejected_row_bar.addClass("progress-bar-disabled")
+      OR_SR_rejected_button_assign.addClass('disabled');
+      OR_SR_rejected_button_reject.addClass('disabled');
+      OR_SR_rejected_button_cc.addClass('disabled');
+    })
+    .fail(function() {
+      alert( "There was an error in the rejection" );        
+    })
+  }
+</script>
+
+[%###################################%]
+[%####### CC User Button Js##########%]
+[%###################################%]
+<script type="text/javascript">
+ function CC_User_click(id)
+  {
+    alert("Not implemented" + id)  
+  }
+</script>
+
+
+<script type="text/javascript">
+function OR_SR_removeParam(key, sourceURL) {
+    var rtn = sourceURL.split("?")[0],
+        param,
+        params_arr = [],
+        queryString = (sourceURL.indexOf("?") !== -1) ? sourceURL.split("?")[1] : "";
+    if (queryString !== "") {
+        params_arr = queryString.split("&");
+        for (var i = params_arr.length - 1; i >= 0; i -= 1) {
+            param = params_arr[i].split("=")[0];
+            if (param === key) {
+                params_arr.splice(i, 1);
+            }
+        }
+        rtn = rtn + "?" + params_arr.join("&");
+    }
+    return rtn;
+}
+</script>
